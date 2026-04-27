@@ -54,7 +54,7 @@ def add_book():
 
 
     status = st.radio(
-        label="",
+        label="Reading Status",
         options= status_options,
         format_func=lambda x: status_labels.get(x),
         index= current_index,
