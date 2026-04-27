@@ -1,0 +1,11 @@
+streamlit
+supabase
+postgrest
+gotrue
+pandas
+openpyxl
+openai
+python-dotenv
+google-generativeai
+plotly
+statsmodels
