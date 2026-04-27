@@ -30,7 +30,7 @@ def add_book():
     if "pub_year" not in state:
         state.pub_year = 0
 ###
-    st.subheader("Finished Your Book" if is_from_tbr else "Log a New Bok")
+    st.subheader("Finished Your Book" if is_from_tbr else "Log a New Book")
 
     status_labels = {
         "read": "Read", 
