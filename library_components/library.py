@@ -209,12 +209,7 @@ def table(supabase, df):
             review_text = book.get("review_text")
 
             if review_text:
-                st.text_area(
-                    label="",
-                    value=review_text,
-                    disabled=True,
-                    height=200
-                )
+                st.write(review_text)
 
 
             st.divider()
