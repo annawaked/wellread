@@ -35,14 +35,14 @@ def get_ai_library_profile(library_dna):
     {library_dna}
     
     1. Identify the 'Thematic Gravity': 5 deep themes that connect these books.
-    2. Score these 4 Moods (0-100): Cozy, Dark, Tense, Cerebral.
+    2. Score these 4 Moods (0-100): Cozy, Dark, Tense, Lighthearted.
     3. Determine the 'Reader Persona': A 3-word title (e.g., 'The Melancholic Voyager').
     4. Current 'Reading Era': A 1-sentence summary of the user's current intellectual phase.
 
     Return ONLY JSON:
     {{
       "themes": ["theme1", "theme2", "theme3", "theme4", "theme5"],
-      "moods": {{"Cozy": 0, "Dark": 0, "Tense": 0, "Cerebral": 0}},
+      "moods": {{"Cozy": 0, "Dark": 0, "Tense": 0, "Lighthearted": 0}},
       "persona": "3-word-title",
       "era_summary": "One sentence summary."
     }}
