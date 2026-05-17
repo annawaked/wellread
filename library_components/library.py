@@ -186,7 +186,8 @@ def table(supabase, df):
             if event.selection.rows:
                 selected_index = event.selection.rows[0]
                 state.selected_book = df.reset_index(drop=True).iloc[selected_index]
-
+            if not event.selection.rows:
+                state.selected_book = None
     # ---------------- RIGHT: DETAIL PANEL ----------------
     with right:
         st.subheader("Book Details")
