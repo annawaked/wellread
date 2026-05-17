@@ -9,6 +9,7 @@ from dashboard_components.publication import pub_rating_correlation, book_age, p
 from background.get_data import load_data
 from background.load_user_library import load_user_library
 from datetime import datetime
+from streamlit import session_state as state
 
 def dashboard_setup():
 
@@ -22,7 +23,8 @@ def dashboard_setup():
         st.info("👋 Welcome to WellRead! Your dashboard is empty because you haven't logged any books yet.")
         st.write("Head over to the **Import** page to sync your Goodreads data or add a book manually.")
         if st.button("Go to Import"):
-            st.switch_page("account.py") # Ensure this path matches your file structure
+            state.current_page = "Account"
+            st.rerun()  
         st.stop() # CRITICAL: This prevents the crash below
     # st.set_page_config(page_title="WellRead", layout="wide")
 
