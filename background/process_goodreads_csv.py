@@ -16,7 +16,7 @@ def process_goodreads_csv(file, progress_bar=None):
         df.columns = df.columns.str.strip()
         total_books = len(df) # Defined here for the progress bar
     except Exception as e:
-        return {"success": False, "message": f"Error reading CSV: {e}"}
+        return {"success": False, "message": f" Uh Oh, Error reading CSV: {e}"}
     
     success_count = 0
     skipped_count = 0
