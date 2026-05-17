@@ -1,19 +1,12 @@
 import pandas as pd
-import time
 from background.supabase_setup import supabase_setup, get_current_user_id
 from background.fetch_book_metadata import fetch_book_metadata
-from background.options import fiction_subgenres, nonfiction_subgenres
 from background.fetch_book_metadata import classify_subgenre_with_ai
+from background.options import fiction_subgenres, nonfiction_subgenres
 
 
-def map_to_subgenre(title, author, genre, meta):
-    """
-    Deterministic subgenre mapping first.
-    """
+def map_to_subgenre(title, author, genre):
     valid_options = fiction_subgenres() if genre == "Fiction" else nonfiction_subgenres()
-
-    # No Google category reliance anymore
-    # Only use AI if needed
 
     try:
         result = classify_subgenre_with_ai(title, author, genre)
@@ -50,12 +43,17 @@ def process_goodreads_csv(file, progress_bar=None):
     skipped_count = 0
     errors = []
 
-    existing_user_books = supabase.table("user_books") \
-        .select("book_id") \
-        .eq("user_id", user_id) \
+    # ---------------------------------------------------
+    # 🔥 BATCH LOAD EXISTING BOOKS (BIG SPEED IMPROVEMENT)
+    # ---------------------------------------------------
+    existing_books = supabase.table("books") \
+        .select("id, title, author") \
         .execute()
 
-    existing_ids = {item['book_id'] for item in existing_user_books.data}
+    existing_map = {
+        (b["title"].strip().lower(), b["author"].strip().lower()): b["id"]
+        for b in (existing_books.data or [])
+    }
 
     for i, (index, row) in enumerate(df.iterrows()):
         try:
@@ -68,31 +66,26 @@ def process_goodreads_csv(file, progress_bar=None):
                     text=f"Importing {i+1}/{total_books}: {title[:30]}..."
                 )
 
-            # ----------------------------
-            # DUPLICATE CHECK
-            # ----------------------------
-            book_check = supabase.table("books") \
-                .select("id") \
-                .eq("title", title) \
-                .eq("author", author) \
-                .execute()
+            key = (title.lower(), author.lower())
 
-            if book_check.data and book_check.data[0]['id'] in existing_ids:
+            # ----------------------------
+            # FAST DUPLICATE CHECK (NO DB CALL)
+            # ----------------------------
+            if key in existing_map:
                 skipped_count += 1
                 continue
 
             # ----------------------------
-            # GOOGLE BOOKS (metadata only, NOT categories)
+            # GOOGLE BOOKS METADATA (KEEP THIS)
             # ----------------------------
             meta = None
             try:
                 meta = fetch_book_metadata(title, author)
-                time.sleep(0.5)
             except Exception:
-                pass
+                meta = None
 
             # ----------------------------
-            # BASIC FIELDS
+            # BASIC DATA
             # ----------------------------
             pages = int(row['Number of Pages']) if pd.notna(row['Number of Pages']) and row['Number of Pages'] > 0 else (meta.get('pages', 0) if meta else 0)
 
@@ -100,17 +93,17 @@ def process_goodreads_csv(file, progress_bar=None):
             pub_year = int(raw_pub) if pd.notna(raw_pub) else (meta.get('pub_year', 0) if meta else 0)
 
             # ----------------------------
-            # FIXED GENRE (no external dependency)
+            # FIXED GENRE (you control system)
             # ----------------------------
             genre = "Fiction"
 
             # ----------------------------
-            # SUBGENRE (NEW SYSTEM)
+            # SUBGENRE (AI ONLY WHEN NEEDED)
             # ----------------------------
-            subgenre = map_to_subgenre(title, author, genre, meta)
+            subgenre = map_to_subgenre(title, author, genre)
 
             # ----------------------------
-            # BOOK DATA
+            # BOOK UPSERT
             # ----------------------------
             book_data = {
                 "title": title,
@@ -122,9 +115,6 @@ def process_goodreads_csv(file, progress_bar=None):
                 "subgenre": subgenre
             }
 
-            # ----------------------------
-            # UPSERT GLOBAL BOOK
-            # ----------------------------
             book_res = supabase.table("books") \
                 .upsert(book_data, on_conflict="title, author") \
                 .execute()
