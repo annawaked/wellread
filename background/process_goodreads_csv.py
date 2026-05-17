@@ -45,7 +45,8 @@ def process_goodreads_csv(file, progress_bar=None):
             # 4. SAFE AUTO-FETCH METADATA (Try/Except handles the Quota Error)
             meta = None
             try:
-                meta = fetch_book_metadata(title, author)
+                meta = fetch_book_metadata(title, author, ai_enabled=False)
+                
                 time.sleep(1) # Slow down to avoid hitting limits too fast
             except Exception:
                 # If Google blocks us, we continue without 'meta'
