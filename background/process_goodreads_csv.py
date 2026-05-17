@@ -1,79 +1,148 @@
 import pandas as pd
-import time 
+import time
 from background.supabase_setup import supabase_setup, get_current_user_id
 from background.fetch_book_metadata import fetch_book_metadata
+from background.options import fiction_subgenres, nonfiction_subgenres
+from background.fetch_book_metadata import classify_subgenre_with_ai
+
+
+def map_to_subgenre(title, author, genre, meta):
+    """
+    Deterministic subgenre mapping first.
+    """
+    valid_options = fiction_subgenres() if genre == "Fiction" else nonfiction_subgenres()
+
+    # No Google category reliance anymore
+    # Only use AI if needed
+
+    try:
+        result = classify_subgenre_with_ai(title, author, genre)
+
+        if result in valid_options:
+            return result
+
+        if result:
+            for opt in valid_options:
+                if result.lower() == opt.lower():
+                    return opt
+
+    except Exception:
+        pass
+
+    return None
+
 
 def process_goodreads_csv(file, progress_bar=None):
     supabase = supabase_setup()
     user_id = get_current_user_id()
-    
+
     if not user_id:
         return {"success": False, "message": "No user logged in."}
 
-    # 1. Load the CSV and define total_books
     try:
         df = pd.read_csv(file)
         df.columns = df.columns.str.strip()
-        total_books = len(df) # Defined here for the progress bar
+        total_books = len(df)
     except Exception as e:
         return {"success": False, "message": f"Error reading CSV: {e}"}
-    
+
     success_count = 0
     skipped_count = 0
     errors = []
 
-    # Get existing books for this user to prevent duplicates
-    existing_user_books = supabase.table("user_books").select("book_id").eq("user_id", user_id).execute()
+    existing_user_books = supabase.table("user_books") \
+        .select("book_id") \
+        .eq("user_id", user_id) \
+        .execute()
+
     existing_ids = {item['book_id'] for item in existing_user_books.data}
 
-    # 2. Loop through the books
     for i, (index, row) in enumerate(df.iterrows()):
         try:
             title = str(row['Title']).strip()
             author = str(row['Author']).strip()
 
-            # Update progress bar if provided
             if progress_bar:
-                progress_bar.progress((i + 1) / total_books, text=f"Importing {i+1}/{total_books}: {title[:30]}...")
+                progress_bar.progress(
+                    (i + 1) / total_books,
+                    text=f"Importing {i+1}/{total_books}: {title[:30]}..."
+                )
 
-            # 3. Duplicate Check
-            book_check = supabase.table("books").select("id").eq("title", title).eq("author", author).execute()
+            # ----------------------------
+            # DUPLICATE CHECK
+            # ----------------------------
+            book_check = supabase.table("books") \
+                .select("id") \
+                .eq("title", title) \
+                .eq("author", author) \
+                .execute()
+
             if book_check.data and book_check.data[0]['id'] in existing_ids:
                 skipped_count += 1
                 continue
 
-            # 4. SAFE AUTO-FETCH METADATA (Try/Except handles the Quota Error)
+            # ----------------------------
+            # GOOGLE BOOKS (metadata only, NOT categories)
+            # ----------------------------
             meta = None
             try:
                 meta = fetch_book_metadata(title, author)
-                time.sleep(1) # Slow down to avoid hitting limits too fast
+                time.sleep(0.5)
             except Exception:
-                # If Google blocks us, we continue without 'meta'
-                pass 
+                pass
 
-            # 5. Prepare Global Book Data
+            # ----------------------------
+            # BASIC FIELDS
+            # ----------------------------
             pages = int(row['Number of Pages']) if pd.notna(row['Number of Pages']) and row['Number of Pages'] > 0 else (meta.get('pages', 0) if meta else 0)
+
             raw_pub = row['Original Publication Year'] if pd.notna(row['Original Publication Year']) else row['Year Published']
             pub_year = int(raw_pub) if pd.notna(raw_pub) else (meta.get('pub_year', 0) if meta else 0)
-            
+
+            # ----------------------------
+            # FIXED GENRE (no external dependency)
+            # ----------------------------
+            genre = "Fiction"
+
+            # ----------------------------
+            # SUBGENRE (NEW SYSTEM)
+            # ----------------------------
+            subgenre = map_to_subgenre(title, author, genre, meta)
+
+            # ----------------------------
+            # BOOK DATA
+            # ----------------------------
             book_data = {
                 "title": title,
                 "author": author,
                 "pages": pages,
                 "pub_year": pub_year,
                 "thumbnail_url": meta.get('thumbnail') if meta else None,
-                "genre": meta.get('genre') if meta and meta.get('genre') else "Fiction",
+                "genre": genre,
+                "subgenre": subgenre
             }
 
-            # 6. Upsert into 'books' table (global)
-            book_res = supabase.table("books").upsert(book_data, on_conflict="title, author").execute()
+            # ----------------------------
+            # UPSERT GLOBAL BOOK
+            # ----------------------------
+            book_res = supabase.table("books") \
+                .upsert(book_data, on_conflict="title, author") \
+                .execute()
+
             if not book_res.data:
                 continue
+
             db_book_id = book_res.data[0]['id']
 
-            # 7. Prepare and Log Personal Data
+            # ----------------------------
+            # USER LOG
+            # ----------------------------
             gr_shelf = str(row['Exclusive Shelf']).lower()
-            status_map = {'read': 'read', 'currently-reading': 'Currently Reading', 'to-read': 'TBR'}
+            status_map = {
+                'read': 'read',
+                'currently-reading': 'Currently Reading',
+                'to-read': 'TBR'
+            }
 
             log_data = {
                 "user_id": user_id,
@@ -86,17 +155,17 @@ def process_goodreads_csv(file, progress_bar=None):
             }
 
             supabase.table("user_books").insert(log_data).execute()
+
             success_count += 1
-            
+
         except Exception as e:
             errors.append(f"Error with {row.get('Title', 'Unknown')}: {str(e)}")
-            
+
     return {
-        "success": True, 
+        "success": True,
         "counts": {
-            "new": success_count, 
+            "new": success_count,
             "skipped": skipped_count,
             "errors": errors,
         }
     }
-
