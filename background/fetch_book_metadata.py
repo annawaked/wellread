@@ -14,7 +14,8 @@ def fetch_book_metadata(title, author):
 
     params = {
         "q": f"intitle:{title} inauthor:{author}",
-        "key": books_api_key
+        "key": books_api_key,
+        "country": "US"
     }
 
     try:
