@@ -22,7 +22,7 @@ def dashboard_setup():
         st.info("👋 Welcome to WellRead! Your dashboard is empty because you haven't logged any books yet.")
         st.write("Head over to the **Import** page to sync your Goodreads data or add a book manually.")
         if st.button("Go to Import"):
-            st.switch_page("pages/1_Import.py") # Ensure this path matches your file structure
+            st.switch_page("account.py") # Ensure this path matches your file structure
         st.stop() # CRITICAL: This prevents the crash below
     # st.set_page_config(page_title="WellRead", layout="wide")
 
