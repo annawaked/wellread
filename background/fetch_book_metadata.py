@@ -1,24 +1,13 @@
-import os
-import json
 import requests
 import streamlit as st 
 import google.generativeai as genai
 
-# 1. CONFIGURE KEYS SAFELY (With Local Fallbacks)
-books_api_key = st.secrets.get('GOOGLE_BOOKS_API_KEY') or os.getenv('GOOGLE_BOOKS_API_KEY')
-ai_api_key = st.secrets.get('GOOGLE_API_KEY') or os.getenv('GOOGLE_API_KEY')
+genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
 
-if ai_api_key:
-    genai.configure(api_key=ai_api_key)
-
-# 2. METADATA FETCHING FUNCTION
+books_api_key = st.secrets['GOOGLE_BOOKS_API_KEY']
 @st.cache_data(show_spinner="Searching Google Books...", ttl=3600) 
-def fetch_book_metadata(title, author):
-    # Quick sanity check for the API key inside the cached execution
-    if not books_api_key:
-        st.sidebar.error("Missing Google Books API Key configuration.")
-        return None
 
+def fetch_book_metadata(title, author):
     clean_title = title.strip().replace(" ", "+")
     clean_author = author.strip().replace(" ", "+")
     
@@ -43,11 +32,14 @@ def fetch_book_metadata(title, author):
             raw_author = ", ".join(volume_info.get("authors", [author])).strip()
             
             raw_categories = volume_info.get("categories", [])
+            primary_category = raw_categories[0]
             category_str = " ".join(raw_categories).lower()
             
             pub_year = volume_info.get("publishedDate", "")
+            
+            
 
-            # Check for Non-Fiction indicators FIRST
+            # 2. Check for Non-Fiction indicators FIRST
             nonfiction_indicators = [
                 "biography", "autobiography", "memoir", "science", "history", 
                 "sociology", "true crime", "medical", "nature", "survival", "essays"
@@ -63,8 +55,8 @@ def fetch_book_metadata(title, author):
             ai_subgenre = classify_subgenre_with_ai(raw_title, raw_author, genre)
 
             return {
-                "title": smart_title(raw_title),
-                "author": raw_author.title(),
+                "title": raw_title.title(),
+                "author":raw_author.title(),
                 "pages": volume_info.get("pageCount", 0),
                 "genre": genre,
                 "subgenre": ai_subgenre,
@@ -76,31 +68,28 @@ def fetch_book_metadata(title, author):
         
     except Exception as e:
         st.sidebar.error(f"Connection Error: {e}")
+        
         return None
     
-# 3. TEXT FORMATTING HELPER
 def smart_title(text):
     if not text: return ""
     minor_words = {'a', 'an', 'the', 'and', 'but', 'or', 'for', 'nor', 'on', 'at', 'to', 'from', 'by', 'of', 'in', 'with'}
     words = text.lower().split()
+    # Capitalize the first word; capitalize others only if they aren't "minor"
     res = [words[0].capitalize()] + [
         w if w in minor_words else w.capitalize() for w in words[1:]
     ]
     return " ".join(res)
 
-# 4. AI SUBGENRE CLASSIFIER
 def classify_subgenre_with_ai(title, author, genre):
-    if not ai_api_key:
-        st.error("🤖 Gemini API Key not configured! Please check your Streamlit Secrets.")
-        return None
-
     from background.options import fiction_subgenres, nonfiction_subgenres
     
     valid_options = fiction_subgenres() if genre == "Fiction" else nonfiction_subgenres()
     options_string = ", ".join(valid_options)
 
+    # We tell Gemini EXACTLY what key to use in the JSON
     prompt = f"""
-    Act as a librarian. Classify '{title}' by {author} into ONE of these subgenres:
+    Act as a librarian. Classify '{title}' by {author} into ONE of these:
     [{options_string}]
     
     Return JSON only: {{"subgenre": "Chosen Category"}}
@@ -113,14 +102,20 @@ def classify_subgenre_with_ai(title, author, genre):
         )
         
         response = model.generate_content(prompt)
+        
+        import json
         res_json = json.loads(response.text)
         ai_choice = res_json.get("subgenre")
 
+        # DEBUG: Check your terminal to see what the AI actually picked!
         print(f"DEBUG: AI picked '{ai_choice}' for {title}")
 
+        # Strict check against your options.py list
         if ai_choice in valid_options:
             return ai_choice
         
+        # If the AI hallucinated a subgenre not in your list, 
+        # try a case-insensitive match as a backup
         for option in valid_options:
             if ai_choice and ai_choice.lower() == option.lower():
                 return option
