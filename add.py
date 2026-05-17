@@ -308,4 +308,27 @@ def add_book():
             except Exception as e:
                 st.error(f"Save failed: {e}")
 
+def reset_add_book_state():
+    keys_to_reset = [
+        "from_tbr_id",
+        "title",
+        "author",
+        "pages_val",
+        "pages",
+        "genre",
+        "subgenre",
+        "thumbnail",
+        "pub_year",
+        "rating",
+        "review",
+        "source",
+        "reread",
+        "date_started",
+        "date_read",
+        "progress",
+        "status",
+    ]
 
+    for key in keys_to_reset:
+        if key in state:
+            del state[key]
