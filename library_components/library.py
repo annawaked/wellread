@@ -204,6 +204,18 @@ def table(supabase, df):
             st.write(f"**Subgenre:** {book.get('subgenre', '')}")
             st.write(f"**Pages:** {book.get('pages', '')}")
             st.write(f"**Published:** {book.get('pub_year', '')}")
+            st.write("**Review**")
+
+            review_text = book.get("review_text")
+
+            if review_text:
+                st.text_area(
+                    label="",
+                    value=review_text,
+                    disabled=True,
+                    height=200
+                )
+
 
             st.divider()
 
