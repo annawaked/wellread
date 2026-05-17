@@ -4,8 +4,8 @@ from background.process_goodreads_csv import process_goodreads_csv
 def render_import_section():
     st.divider()
     with st.expander("📥 Import Library from Goodreads"):
-        st.info("Upload your Goodreads export CSV. We'll skip books you've already added.")
-        st.warning("This may take awhile, so go ahead and open a new book while you wait")
+        st.info("Upload your Goodreads export CSV. We'll skip books you've already added." \
+        "Warning! This may take awhile, so go ahead and open a new book while you wait")
         
         file = st.file_uploader("Upload CSV", type="csv", label_visibility="collapsed")
         
