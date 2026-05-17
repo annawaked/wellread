@@ -24,7 +24,7 @@ else:
             state.current_page = "Dashboard"
 
     with st.sidebar:
-        st.title("WellRead")
+        st.image("WellRead.png", width=200)
         st.divider()
         
         if st.button(label="Dashboard",
