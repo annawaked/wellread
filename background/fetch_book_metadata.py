@@ -8,7 +8,7 @@ genai.configure(api_key=st.secrets.get("GEMINI_API_KEY"))
 
 
 @st.cache_data(show_spinner="Searching Google Books...", ttl=300)
-def fetch_book_metadata(title, author):
+def fetch_book_metadata(title, author, ai_enabled=True):
     if not title or not author:
         return None
 
@@ -25,10 +25,6 @@ def fetch_book_metadata(title, author):
             timeout=5
         )
 
-        # --- DEBUG LOGGING (check Streamlit logs) ---
-        print("STATUS:", response.status_code)
-        print("RESPONSE TEXT:", response.text[:500])
-
         if response.status_code != 200:
             st.error(f"HTTP Error: {response.status_code}")
             st.write(response.text)
@@ -36,26 +32,20 @@ def fetch_book_metadata(title, author):
 
         data = response.json()
 
-        if "error" in data:
-            st.error(f"Google API Error: {data['error']}")
-            return None
-
-        if "items" not in data or not data["items"]:
+        if "error" in data or "items" not in data or not data["items"]:
             return None
 
         volume_info = data["items"][0].get("volumeInfo", {})
 
-        # --- SAFE FIELD EXTRACTION ---
         raw_title = volume_info.get("title", title).strip()
         raw_author = ", ".join(volume_info.get("authors", [author])).strip()
 
         raw_categories = volume_info.get("categories", [])
-        primary_category = raw_categories[0] if raw_categories else ""
         category_str = " ".join(raw_categories).lower()
 
         pub_year = volume_info.get("publishedDate", "")
 
-        # --- GENRE LOGIC ---
+        # --- GENRE LOGIC (unchanged) ---
         nonfiction_indicators = [
             "biography", "autobiography", "memoir", "science", "history",
             "sociology", "true crime", "medical", "nature", "survival", "essays"
@@ -68,8 +58,11 @@ def fetch_book_metadata(title, author):
         else:
             genre = "Non-Fiction"
 
-        # --- AI SUBGENRE ---
-        ai_subgenre = classify_subgenre_with_ai(raw_title, raw_author, genre)
+        # --- AI SUBGENRE (NOW CONTROLLED) ---
+        ai_subgenre = None
+
+        if ai_enabled:
+            ai_subgenre = classify_subgenre_with_ai(raw_title, raw_author, genre)
 
         return {
             "title": smart_title(raw_title),
@@ -84,7 +77,6 @@ def fetch_book_metadata(title, author):
 
     except Exception as e:
         st.error(f"Connection/Error: {e}")
-        print("EXCEPTION:", e)
         return None
 
 
@@ -101,12 +93,10 @@ def smart_title(text):
     if not words:
         return ""
 
-    result = [words[0].capitalize()] + [
+    return [words[0].capitalize()] + [
         w if w in minor_words else w.capitalize()
         for w in words[1:]
     ]
-
-    return " ".join(result)
 
 
 def classify_subgenre_with_ai(title, author, genre):
@@ -134,12 +124,9 @@ def classify_subgenre_with_ai(title, author, genre):
         res_json = json.loads(response.text)
         ai_choice = res_json.get("subgenre")
 
-        print(f"DEBUG: AI picked '{ai_choice}' for {title}")
-
         if ai_choice in valid_options:
             return ai_choice
 
-        # Case-insensitive fallback
         for option in valid_options:
             if ai_choice and ai_choice.lower() == option.lower():
                 return option
@@ -148,5 +135,4 @@ def classify_subgenre_with_ai(title, author, genre):
 
     except Exception as e:
         st.error(f"AI Error: {e}")
-        print("AI EXCEPTION:", e)
         return None
